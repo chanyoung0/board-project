@@ -22,7 +22,7 @@ spec:
         kubernetes.io/hostname: myserver02
       containers:
       - name: backend
-        image: chanyoung123/board-backend:3c5d399
+        image: chanyoung123/board-backend:275559f
         ports:
         - containerPort: 8080
         env:

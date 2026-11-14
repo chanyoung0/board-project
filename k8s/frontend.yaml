@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: chanyoung123/board-frontend:3c5d399
+        image: chanyoung123/board-frontend:275559f
         ports:
         - containerPort: 80
 ---
