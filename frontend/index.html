@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>클라우드 네이티브 게시판</title>
+    <style>
+        body { font-family: sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; color: #222; }
+        h1 { font-size: 24px; }
+        .version { color: #888; font-size: 13px; }
+        form, .post { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        input, textarea { width: 100%; box-sizing: border-box; padding: 8px; margin: 4px 0 10px; font: inherit; }
+        textarea { height: 90px; resize: vertical; }
+        button { padding: 6px 14px; margin-right: 6px; cursor: pointer; }
+        .post h3 { margin: 0 0 6px; }
+        .meta { color: #888; font-size: 13px; margin-bottom: 10px; }
+        .content { white-space: pre-wrap; margin-bottom: 12px; }
+        .empty { color: #888; }
+    </style>
+</head>
+<body>
+<h1>클라우드 네이티브 게시판</h1>
+<!-- CI/CD 시연할 때 이 문구를 바꿔서 push → 자동 배포 확인 -->
+<p class="version">v1</p>
+
+<form id="post-form">
+    <input type="hidden" id="post-id">
+    <label>제목<input id="title" required maxlength="100"></label>
+    <label>작성자<input id="author" required maxlength="30"></label>
+    <label>내용<textarea id="content" required maxlength="2000"></textarea></label>
+    <button type="submit" id="submit-btn">작성</button>
+    <button type="button" id="cancel-btn" hidden>수정 취소</button>
+</form>
+
+<div id="posts"></div>
+
+<script>
+    const API = '/api/posts';
+    const form = document.getElementById('post-form');
+    const idInput = document.getElementById('post-id');
+    const titleInput = document.getElementById('title');
+    const authorInput = document.getElementById('author');
+    const contentInput = document.getElementById('content');
+    const submitBtn = document.getElementById('submit-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const postsDiv = document.getElementById('posts');
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatDate(value) {
+        return value ? value.replace('T', ' ').substring(0, 19) : '';
+    }
+
+    async function loadPosts() {
+        const res = await fetch(API);
+        if (!res.ok) {
+            postsDiv.innerHTML = '<p class="empty">목록을 불러오지 못했습니다 (' + res.status + ')</p>';
+            return;
+        }
+        const posts = await res.json();
+        if (posts.length === 0) {
+            postsDiv.innerHTML = '<p class="empty">게시글이 없습니다.</p>';
+            return;
+        }
+        postsDiv.innerHTML = posts.map(p =>
+            '<div class="post">' +
+            '<h3>' + escapeHtml(p.title) + '</h3>' +
+            '<div class="meta">#' + p.id + ' · ' + escapeHtml(p.author) + ' · ' + formatDate(p.createdAt) +
+            (p.updatedAt !== p.createdAt ? ' (수정됨 ' + formatDate(p.updatedAt) + ')' : '') + '</div>' +
+            '<div class="content">' + escapeHtml(p.content) + '</div>' +
+            '<button onclick="startEdit(' + p.id + ')">수정</button>' +
+            '<button onclick="deletePost(' + p.id + ')">삭제</button>' +
+            '</div>'
+        ).join('');
+    }
+
+    async function startEdit(id) {
+        const res = await fetch(API + '/' + id);
+        const p = await res.json();
+        idInput.value = p.id;
+        titleInput.value = p.title;
+        authorInput.value = p.author;
+        authorInput.disabled = true;
+        contentInput.value = p.content;
+        submitBtn.textContent = '수정 완료';
+        cancelBtn.hidden = false;
+        window.scrollTo(0, 0);
+    }
+
+    function resetForm() {
+        form.reset();
+        idInput.value = '';
+        authorInput.disabled = false;
+        submitBtn.textContent = '작성';
+        cancelBtn.hidden = true;
+    }
+
+    async function deletePost(id) {
+        if (!confirm('#' + id + ' 게시글을 삭제할까요?')) return;
+        await fetch(API + '/' + id, { method: 'DELETE' });
+        loadPosts();
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = idInput.value;
+        const body = id
+            ? { title: titleInput.value, content: contentInput.value }
+            : { title: titleInput.value, content: contentInput.value, author: authorInput.value };
+        const res = await fetch(id ? API + '/' + id : API, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+            alert('저장 실패 (' + res.status + ')');
+            return;
+        }
+        resetForm();
+        loadPosts();
+    });
+
+    cancelBtn.addEventListener('click', resetForm);
+
+    loadPosts();
+</script>
+</body>
+</html>

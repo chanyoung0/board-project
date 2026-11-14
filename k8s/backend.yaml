@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: board-backend
+  namespace: board
+spec:
+  # H2가 백엔드에 내장 → 파드가 2개면 DB도 2개가 돼서 데이터가 갈라짐
+  replicas: 1
+  # 새 파드와 옛 파드가 동시에 H2 파일을 열면 lock 에러 → 옛 파드를 먼저 내림
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: board-backend
+  template:
+    metadata:
+      labels:
+        app: board-backend
+    spec:
+      # hostPath 데이터가 이 노드 디스크에 있으므로 항상 같은 노드에 배치
+      nodeSelector:
+        kubernetes.io/hostname: myserver02
+      containers:
+      - name: backend
+        image: chanyoung123/board-backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_PATH
+          value: /data/board
+        volumeMounts:
+        - name: h2-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: 384Mi
+            cpu: 100m
+          limits:
+            memory: 768Mi
+        readinessProbe:
+          httpGet:
+            path: /api/posts
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
+      volumes:
+      - name: h2-data
+        hostPath:
+          path: /var/lib/board-data
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: board-backend
+  namespace: board
+spec:
+  type: ClusterIP
+  selector:
+    app: board-backend
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
